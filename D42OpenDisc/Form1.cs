@@ -31,7 +31,18 @@ namespace D42OpenDisc
         CancellationTokenSource tokenSource = new CancellationTokenSource();
         CancellationTokenSource tokenSource_win = new CancellationTokenSource();
         string folder_path = "Default";
-        
+        // DPR: Dataset for all discovered data
+        DataSet dataSet1 = new DataSet();
+        string CurrentTable = "";
+        int CurrentTableNo = 0;
+        DataRow CurrentRow = null;
+        string[] DeviceCols = { "device_name", "list_mftr", "list_hw", "list_sn", "list_os", "list_osver", "list_osverno",
+                                "list_osserial", "list_osmftr", "list_mem", "list_cpucount", "list_cpucore", "list_cpuspeed" };
+        string[] IPCols = { "ipaddress", "tag", "macadd", "device_name" };
+        string[] IP6Cols = { "ipaddress", "tag", "macadd", "device_name" };
+        string[] MACCols = { "MAC", "IP", "IPv6", "DNS", "gateway", "mtu", "vlan", "device_name" };
+        //string[] MACCols = { "MAC", "IP", "IPv6", "DNS", "gateway", "mtu", "vlan", "device", "device_name", "currently_attached", "host", "uuid", "ref" };
+
         public Form1()
         {
             InitializeComponent();
@@ -39,7 +50,67 @@ namespace D42OpenDisc
             Debug.Listeners.Add(debugListener);
             Control.CheckForIllegalCrossThreadCalls = false;
             file_path.Text = "Current folder where file is saved: " + folder_path;
+            // DPR Add tables for data results
+            dataSet1.Tables.Add("Devices");
+            foreach (string DCol in DeviceCols) { dataSet1.Tables["Devices"].Columns.Add(new DataColumn(DCol, typeof(string))); }
+            dataSet1.Tables.Add("IP");
+            foreach (string DCol in IPCols) { dataSet1.Tables["IP"].Columns.Add(new DataColumn(DCol, typeof(string))); }
+            dataSet1.Tables.Add("IP6");
+            foreach (string DCol in IP6Cols) { dataSet1.Tables["IP6"].Columns.Add(new DataColumn(DCol, typeof(string))); }
+            dataSet1.Tables.Add("MAC");
+            foreach (string DCol in MACCols) { dataSet1.Tables["MAC"].Columns.Add(new DataColumn(DCol, typeof(string))); }
 
+        }
+
+        private void DsUseRecord(string dtname, string dtrowname, string dtprim)
+        {
+            DataRow rowfound = null;
+            try
+            {
+                // Check if Record is already created
+                string dtsearch = dtrowname + " = '" + dtprim + "'";
+                rowfound = dataSet1.Tables[dtname].Select(dtsearch).FirstOrDefault();
+                if (rowfound == null)
+                {
+                    // Device not found, create new record
+                    DataRow newrow = dataSet1.Tables[dtname].NewRow();
+                    newrow[dtrowname] = dtprim;
+                    dataSet1.Tables[dtname].Rows.Add(newrow);
+                    rowfound = dataSet1.Tables[dtname].Select(dtsearch).FirstOrDefault();
+                }
+            }
+            finally
+            {
+                // Update Record
+                CurrentRow = rowfound;
+            }
+        }
+
+        private void DsUpdateValue(string dtname, string dtrowname, string dtprim, string dtcol, string dtval)
+        {
+            DataRow upddr = null;
+            try
+            {
+                // Check if Record is already created
+                string dtsearch = dtrowname + " = '" + dtprim + "'";
+                DataRow rowfound = dataSet1.Tables[dtname].Select(dtsearch).FirstOrDefault();
+                if (rowfound == null)
+                {
+                    // Device not found, create new record
+                    upddr = dataSet1.Tables[dtname].NewRow();
+                    upddr[dtrowname] = dtprim;
+                    dataSet1.Tables[dtname].Rows.Add(upddr);
+                }
+                else
+                {
+                    upddr = rowfound;
+                }
+            }
+            finally
+            {
+                // Update Record
+                upddr[dtcol] = dtval;
+            }
         }
 
         private void gothroughwin(string c, string username, string password)
@@ -90,15 +161,8 @@ namespace D42OpenDisc
 
                         device_name = oReturn["Name"].ToString().ToLower();
                         
-
-                        foreach (string[] subList in all_the_values)
+                        if (not_has)
                         {
-                            if (subList[0] == device_name) { not_has = false; break; }
-                        }
-
-
-                        if (not_has) {
-                        
                             //Trace.WriteLine(add_to_all_the_values);
                             string Mftr = oReturn["Manufacturer"].ToString().TrimStart().TrimEnd();
                             string manufacturer = "";
@@ -127,7 +191,7 @@ namespace D42OpenDisc
                         foreach (ManagementObject oReturn in oReturnCollection_os)
                         {
                             list_os = oReturn["Caption"].ToString();
-                            list_osver = oReturn["CSDVersion"].ToString();
+                            // DPR bug? - list_osver = oReturn["CSDVersion"].ToString();
                             list_osmftr = oReturn["Manufacturer"].ToString();
                             list_osserial = oReturn["SerialNumber"].ToString();
                             list_osverno = oReturn["Version"].ToString();
@@ -156,7 +220,21 @@ namespace D42OpenDisc
                             Trace.WriteLine("Could not get CPU info for " + c);
                         }
 
-                        all_the_values.Add(new string[] { device_name, list_mftr, list_hw, list_sn, list_os, list_osver, list_osverno, list_osserial, list_osmftr, list_mem, list_cpucount, list_cpucore, list_cpuspeed });
+                        // DPR Place device into a record in the table
+                        DsUseRecord("Devices", "device_name", device_name);
+                        // all_the_values.Add(new string[] { device_name, list_mftr, list_hw, list_sn, list_os, list_osver, list_osverno, list_osserial, list_osmftr, list_mem, list_cpucount, list_cpucore, list_cpuspeed });
+                        CurrentRow["list_mftr"] = list_mftr;
+                        CurrentRow["list_hw"] = list_hw;
+                        CurrentRow["list_sn"] = list_sn;
+                        CurrentRow["list_os"] = list_os;
+                        CurrentRow["list_osver"] = list_osver;
+                        CurrentRow["list_osverno"] = list_osverno;
+                        CurrentRow["list_osserial"] = list_osserial;
+                        CurrentRow["list_osmftr"] = list_osmftr;
+                        CurrentRow["list_mem"] = list_mem;
+                        CurrentRow["list_cpucount"] = list_cpucount;
+                        CurrentRow["list_cpucore"] = list_cpucore;
+                        CurrentRow["list_cpuspeed"] = list_cpuspeed;
                         
                         foreach (ManagementObject oReturn in oReturnCollection_nw)
                         {
@@ -165,11 +243,21 @@ namespace D42OpenDisc
                             string[] addresses = (string[])oReturn["IPAddress"];
                             foreach (string ipaddress in addresses)
                             {
-                                if (ipaddress.Contains('.')) {
-                                all_the_ip_values.Add(new string[] { ipaddress,tag, macadd, device_name});
+                                if (ipaddress.Contains('.'))
+                                {
+                                    // all_the_ip_values.Add(new string[] { ipaddress,tag, macadd, device_name});
+                                    DsUseRecord("IP", "ipaddress", ipaddress);
+                                    CurrentRow["tag"] = tag;
+                                    CurrentRow["macadd"] = macadd;
+                                    CurrentRow["device_name"] = device_name;
                                 }
-                                else {
-                                    all_the_ip6_values.Add(new string[] { ipaddress,tag, macadd, device_name});
+                                else
+                                {
+                                    // all_the_ip6_values.Add(new string[] { ipaddress,tag, macadd, device_name});
+                                    DsUseRecord("IP6", "ipaddress", ipaddress);
+                                    CurrentRow["tag"] = tag;
+                                    CurrentRow["macadd"] = macadd;
+                                    CurrentRow["device_name"] = device_name;
                                 }
 
                             }
@@ -189,8 +277,7 @@ namespace D42OpenDisc
             task_1.Start();
             task_1.ContinueWith(t => check_win_progress());
         }
-
-
+        
         private void winrunnow_Click(object sender, EventArgs e)
         {
 
@@ -304,6 +391,7 @@ namespace D42OpenDisc
             }
 
         }
+
         private void gothroughlinux(string c, string username, string password)
         {
 
@@ -416,7 +504,22 @@ namespace D42OpenDisc
                                                 list_cpucount = cpucount.ToString(); list_cpuspeed = Convert.ToString(cspeed);
                                                 if (cpucores != "") { list_cpucore = cpucores; }
                                             }
-                                            all_the_values.Add(new string[] { dev_name, list_mftr, list_hw, list_sn, list_os, list_osver, list_osverno, list_osserial, list_osmftr, list_mem.ToString(), list_cpucount, list_cpucore, list_cpuspeed });
+
+                                            // DPR Place device into a record in the table
+                                            DsUseRecord("Devices", "device_name", dev_name);
+                                            //all_the_values.Add(new string[] { dev_name, list_mftr, list_hw, list_sn, list_os, list_osver, list_osverno, list_osserial, list_osmftr, list_mem.ToString(), list_cpucount, list_cpucore, list_cpuspeed });
+                                            CurrentRow["list_mftr"] = list_mftr;
+                                            CurrentRow["list_hw"] = list_hw;
+                                            CurrentRow["list_sn"] = list_sn;
+                                            CurrentRow["list_os"] = list_os;
+                                            CurrentRow["list_osver"] = list_osver;
+                                            CurrentRow["list_osverno"] = list_osverno;
+                                            CurrentRow["list_osserial"] = list_osserial;
+                                            CurrentRow["list_osmftr"] = list_osmftr;
+                                            CurrentRow["list_mem"] = list_mem.ToString();
+                                            CurrentRow["list_cpucount"] = list_cpucount;
+                                            CurrentRow["list_cpucore"] = list_cpucore;
+                                            CurrentRow["list_cpuspeed"] = list_cpuspeed;
 
                                             string[] ifaces = Regex.Split(ifconfig.Result, "--\n");
 
@@ -435,8 +538,12 @@ namespace D42OpenDisc
 
 
                                                     }
-                                                    all_the_ip_values.Add(new string[] { ipv4_address, tag, mac, dev_name });
 
+                                                    //all_the_ip_values.Add(new string[] { ipv4_address, tag, mac, dev_name });
+                                                    DsUseRecord("IP", "ipaddress", ipv4_address);
+                                                    CurrentRow["tag"] = tag;
+                                                    CurrentRow["macadd"] = mac;
+                                                    CurrentRow["device_name"] = dev_name;
 
                                                 }
                                                 if (iface.Contains("inet6 addr"))
@@ -451,7 +558,12 @@ namespace D42OpenDisc
 
 
                                                     }
-                                                    all_the_ip6_values.Add(new string[] { ipv6_address, tag, mac, dev_name });
+
+                                                    //all_the_ip6_values.Add(new string[] { ipv6_address, tag, mac, dev_name });
+                                                    DsUseRecord("IPv6", "ipaddress", ipv6_address);
+                                                    CurrentRow["tag"] = tag;
+                                                    CurrentRow["macadd"] = mac;
+                                                    CurrentRow["device_name"] = dev_name;
 
                                                 }
                                             }
@@ -562,7 +674,6 @@ namespace D42OpenDisc
 
             
         }
-
 
         private void winrange_CheckedChanged(object sender, EventArgs e)
         {
@@ -714,6 +825,7 @@ namespace D42OpenDisc
             }
 
         }
+
         private long upper_power_of_two(long v)
         {
             v--;
@@ -726,6 +838,7 @@ namespace D42OpenDisc
             return v;
 
         }
+
         private  List<string> get_ip_list(string start_ip, string end_ip) {
 
             System.Net.IPAddress startIP = System.Net.IPAddress.Parse(start_ip);
@@ -754,6 +867,7 @@ namespace D42OpenDisc
 
                                     return ips;
     }
+
         private bool read_from_excel(ExcelWorksheet worksheet, string dev)
         {
             bool dont_have = true;
@@ -785,6 +899,11 @@ namespace D42OpenDisc
         {
             if (!being_written)
             {
+                // DPR Enable the data tables
+                button1.Enabled = true;
+                CurrentTableNo = 0;
+                textBox1.Text = dataSet1.Tables[CurrentTableNo].TableName;
+                dataGridView1.DataSource = dataSet1.Tables[CurrentTableNo];
                 string f_name;
                 if (folder_path == "Default") { f_name = "D42_Device_IP.xlsx"; }
                 else { f_name = folder_path + "\\D42_Device_IP.xlsx"; }
@@ -795,6 +914,8 @@ namespace D42OpenDisc
                     {
                         being_written = true;
                         ExcelWorksheet worksheet;
+
+                        // Create Worksheet "Devices"
                         int row = 2;
                         try
                         {
@@ -803,102 +924,200 @@ namespace D42OpenDisc
                         }
                         catch (Exception ex) 
                         {
-                            Console.WriteLine(ex.ToString()); 
+                            Console.WriteLine(ex.ToString());
                             worksheet = xlPackage.Workbook.Worksheets.Add("Devices");
-                            worksheet.Cells[1, 1].Value = "Device Name";
-                            worksheet.Cells[1, 2].Value = "Manufacturer";
-                            worksheet.Cells[1, 3].Value = "Hardware Model";
-                            worksheet.Cells[1, 4].Value = "Serial #";
-                            worksheet.Cells[1, 5].Value = "OS";
-                            worksheet.Cells[1, 6].Value = "OS Version";
-                            worksheet.Cells[1, 7].Value = "OS Version #";
-                            worksheet.Cells[1, 8].Value = "OS Serial #";
-                            worksheet.Cells[1, 9].Value = "OS Manufacturer";
-                            worksheet.Cells[1, 10].Value = "Memory in MB";
-                            worksheet.Cells[1, 11].Value = "CPU Count";
-                            worksheet.Cells[1, 12].Value = "Cores per CPU";
-                            worksheet.Cells[1, 13].Value = "CPU Speed(GHz)";
+                            //worksheet.Cells[1, 1].Value = "Device Name";
+                            //worksheet.Cells[1, 2].Value = "Manufacturer";
+                            //worksheet.Cells[1, 3].Value = "Hardware Model";
+                            //worksheet.Cells[1, 4].Value = "Serial #";
+                            //worksheet.Cells[1, 5].Value = "OS";
+                            //worksheet.Cells[1, 6].Value = "OS Version";
+                            //worksheet.Cells[1, 7].Value = "OS Version #";
+                            //worksheet.Cells[1, 8].Value = "OS Serial #";
+                            //worksheet.Cells[1, 9].Value = "OS Manufacturer";
+                            //worksheet.Cells[1, 10].Value = "Memory in MB";
+                            //worksheet.Cells[1, 11].Value = "CPU Count";
+                            //worksheet.Cells[1, 12].Value = "Cores per CPU";
+                            //worksheet.Cells[1, 13].Value = "CPU Speed(GHz)";
+                            // DPR
+                            int wsrow = 1;
+                            foreach (DataColumn dc in dataSet1.Tables["Devices"].Columns)
+                            {
+                                worksheet.Cells[1, wsrow].Value = dc.ColumnName;
+                                wsrow += 1;
+                            }
                             worksheet.Cells["A1:M1"].Style.Font.Bold = true;
                         }
 
                         int col = 1;
-                        foreach (string[] subList in all_the_values)
+                        // foreach (string[] subList in all_the_values)
+                        foreach (DataRow dr in dataSet1.Tables["Devices"].Rows)
                         {
-                            if (read_from_excel(worksheet, subList[0]))
+                            if (read_from_excel(worksheet, dr[0].ToString()))
                             {
-                            foreach (string item in subList)
+                            //foreach (string item in subList)
+                            foreach (DataColumn dc in dataSet1.Tables["Devices"].Columns)
                             {
-                                worksheet.Cells[row, col].Value = item;
+                                worksheet.Cells[row, col].Value = dr[dc].ToString();
                                 col += 1;
                             }
                             row += 1;
                             col = 1;
                             }
                         }
+
+                        // Create Worksheet "IP"
                         ExcelWorksheet worksheet_ip;
-                        int row_ip = 2;
+                        row = 2;
                         try
                         {
                             worksheet_ip = xlPackage.Workbook.Worksheets[2];
-                            row_ip = worksheet_ip.Dimension.End.Row + 1;
+                            row = worksheet_ip.Dimension.End.Row + 1;
                         }
                         catch
                         {
                             worksheet_ip = xlPackage.Workbook.Worksheets.Add("IPv4");
-                            worksheet_ip.Cells[1, 1].Value = "IP Address";
-                            worksheet_ip.Cells[1, 2].Value = "Interface Name";
-                            worksheet_ip.Cells[1, 3].Value = "MAC Address";
-                            worksheet_ip.Cells[1, 4].Value = "Device Name";
+                            //worksheet_ip.Cells[1, 1].Value = "IP Address";
+                            //worksheet_ip.Cells[1, 2].Value = "Interface Name";
+                            //worksheet_ip.Cells[1, 3].Value = "MAC Address";
+                            //worksheet_ip.Cells[1, 4].Value = "Device Name";
+                            // DPR
+                            int wsrow = 1;
+                            foreach (DataColumn dc in dataSet1.Tables["IP"].Columns)
+                            {
+                                worksheet_ip.Cells[1, wsrow].Value = dc.ColumnName;
+                                wsrow += 1;
+                            }
                             worksheet_ip.Cells["A1:D1"].Style.Font.Bold = true;
                         }
 
-                        int col_ip = 1;
-                        foreach (string[] subList in all_the_ip_values)
+                        col = 1;
+                        foreach (DataRow dr in dataSet1.Tables["IP"].Rows)
                         {
-                            if (read_from_excel(worksheet_ip, subList[0]))
+                            if (read_from_excel(worksheet_ip, dr[0].ToString()))
                             {
-                                foreach (string item in subList)
+                                foreach (DataColumn dc in dataSet1.Tables["IP"].Columns)
                                 {
-                                    worksheet_ip.Cells[row_ip, col_ip].Value = item;
-                                    col_ip += 1;
+                                    worksheet_ip.Cells[row, col].Value = dr[dc].ToString();
+                                    col += 1;
                                 }
-                                row_ip += 1;
-                                col_ip = 1;
+                                row += 1;
+                                col = 1;
                             }
                         }
+
+                        // Create Worksheet "IPv6"
                         ExcelWorksheet worksheet_ip6;
-                        int row_ip6 = 2;
+                        row = 2;
                         try
                         {
                             worksheet_ip6 = xlPackage.Workbook.Worksheets[3];
-                            row_ip6 = worksheet_ip6.Dimension.End.Row + 1;
+                            row = worksheet_ip6.Dimension.End.Row + 1;
                         }
                         catch
                         {
                             worksheet_ip6 = xlPackage.Workbook.Worksheets.Add("IPv6");
-                            worksheet_ip6.Cells[1, 1].Value = "IPv6 Address";
-                            worksheet_ip6.Cells[1, 2].Value = "Interface Name";
-                            worksheet_ip6.Cells[1, 3].Value = "MAC Address";
-                            worksheet_ip6.Cells[1, 4].Value = "Device Name";
+                            //worksheet_ip6.Cells[1, 1].Value = "IPv6 Address";
+                            //worksheet_ip6.Cells[1, 2].Value = "Interface Name";
+                            //worksheet_ip6.Cells[1, 3].Value = "MAC Address";
+                            //worksheet_ip6.Cells[1, 4].Value = "Device Name";
+                            // DPR
+                            int wsrow = 1;
+                            foreach (DataColumn dc in dataSet1.Tables["IP6"].Columns)
+                            {
+                                worksheet_ip6.Cells[1, wsrow].Value = dc.ColumnName;
+                                wsrow += 1;
+                            }
                             worksheet_ip6.Cells["A1:D1"].Style.Font.Bold = true;
                         }
 
-                        int col_ip6 = 1;
-                        foreach (string[] subList in all_the_ip6_values)
+                        col = 1;
+                        
+                        foreach (DataRow dr in dataSet1.Tables["IP6"].Rows)
                         {
-                            if (read_from_excel(worksheet_ip6, subList[0]))
+                            if (read_from_excel(worksheet_ip6, dr[0].ToString()))
                             {
-                                foreach (string item in subList)
+                                foreach (DataColumn dc in dataSet1.Tables["IP6"].Columns)
                                 {
-                                    worksheet_ip6.Cells[row_ip6, col_ip6].Value = item;
-                                    col_ip6 += 1;
+                                    worksheet_ip6.Cells[row, col].Value = dr[dc].ToString();
+                                    col += 1;
                                 }
-                                row_ip6 += 1;
-                                col_ip6 = 1;
+                                row += 1;
+                                col = 1;
                             }
                         }
+
+                        // DPR Fill MAC table from IP and IPv6 tables
+                        // string[] IPCols = { "ipaddress", "tag", "macadd", "device_name" };
+                        // string[] IP6Cols = { "ipaddress", "tag", "macadd", "device_name" };
+                        // string[] MACCols = { "MAC", "IP", "IPv6", "DNS", "gateway", "mtu", "vlan", "device_name" };
+                        foreach (DataRow dr in dataSet1.Tables["IP"].Rows)
+                        {
+                            foreach (DataColumn dc in dataSet1.Tables["IP"].Columns)
+                            {
+                                string macaddr = dr["macadd"].ToString();
+                                switch (dc.ColumnName)
+                                {
+                                    case "ipaddress":
+                                        DsUpdateValue("MAC", "MAC", macaddr, "IP", dr[dc.ColumnName].ToString());
+                                        break;
+                                    case "device_name":
+                                        DsUpdateValue("MAC", "MAC", macaddr, "device_name", dr[dc.ColumnName].ToString());
+                                        break;
+                                }                       
+                            }
+                        }
+                        foreach (DataRow dr in dataSet1.Tables["IP6"].Rows)
+                        {
+                            DsUpdateValue("MAC", "MAC", dr["macadd"].ToString(), "IPv6", dr["IPAddress"].ToString());   
+                        }
+                        // Create Worksheet "MAC"
+                        ExcelWorksheet worksheet_mac;
+                        row = 2;
+                        try
+                        {
+                            worksheet_mac = xlPackage.Workbook.Worksheets[4];
+                            row = worksheet_mac.Dimension.End.Row + 1;
+                        }
+                        catch
+                        {
+                            worksheet_mac = xlPackage.Workbook.Worksheets.Add("MAC");
+                            //worksheet_mac.Cells[1, 1].Value = "MAC";
+                            //worksheet_mac.Cells[1, 2].Value = "IP";
+                            //worksheet_mac.Cells[1, 3].Value = "IPv6";
+                            //worksheet_mac.Cells[1, 3].Value = "DNS";
+                            //worksheet_mac.Cells[1, 3].Value = "gateway";
+                            //worksheet_mac.Cells[1, 3].Value = "mtu";
+                            //worksheet_mac.Cells[1, 3].Value = "vlan";
+                            //worksheet_mac.Cells[1, 4].Value = "device_name";
+                            // DPR
+                            int wsrow = 1;
+                            foreach (DataColumn dc in dataSet1.Tables["MAC"].Columns)
+                            {
+                                worksheet_mac.Cells[1, wsrow].Value = dc.ColumnName;
+                                wsrow += 1;
+                            }
+                            worksheet_mac.Cells["A1:I1"].Style.Font.Bold = true;
+                        }
+
+                        col = 1;
+
+                        foreach (DataRow dr in dataSet1.Tables["MAC"].Rows)
+                        {
+                            if (read_from_excel(worksheet_mac, dr[0].ToString()))
+                            {
+                                foreach (DataColumn dc in dataSet1.Tables["MAC"].Columns)
+                                {
+                                    worksheet_mac.Cells[row, col].Value = dr[dc].ToString();
+                                    col += 1;
+                                }
+                                row += 1;
+                                col = 1;
+                            }
+                        }
+
                         // set some core property values
-                        xlPackage.Workbook.Properties.Title = "D42 Devices and IP Excel Sheet";
+                        xlPackage.Workbook.Properties.Title = "D42 Devices, IP and MAC Excel Sheet";
                         xlPackage.Workbook.Properties.Author = "Device42 Open Discovery Software";
                         
                         xlPackage.Save();
@@ -918,7 +1137,6 @@ namespace D42OpenDisc
             }
         }
 
-        
         public class MyTraceListener : TraceListener
     {
         private TextBoxBase output;
@@ -972,6 +1190,13 @@ namespace D42OpenDisc
         {
             linkLabel4.LinkVisited = true;
             System.Diagnostics.Process.Start("http://www.device42.com/twitter_od/");
+        }
+
+        private void button1_Click_1(object sender, EventArgs e)
+        {
+            if ((CurrentTableNo + 1) < dataSet1.Tables.Count) { CurrentTableNo += 1; } else { CurrentTableNo = 0; }
+            textBox1.Text = dataSet1.Tables[CurrentTableNo].TableName;
+            dataGridView1.DataSource = dataSet1.Tables[CurrentTableNo];
         }
 
         private void file_path_button_Click(object sender, EventArgs e)
